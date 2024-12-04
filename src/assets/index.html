@@ -133,7 +133,7 @@
                            :class="{'d-none': filterSelected
                                               && !(current.folder.id == folder.id || current.feed.folder_id == folder.id)
                                               && !filteredFolderStats[folder.id]
-                                              && (!itemSelectedDetails || feedsById[itemSelectedDetails.feed_id].folder_id != folder.id)}">
+                                              && (!itemSelectedDetails || (feedsById[itemSelectedDetails.feed_id] || {}).folder_id != folder.id)}">
                         <input type="radio" name="feed" :value="'folder:'+folder.id" v-model="feedSelected" v-if="folder.id">
                         <div class="selectgroup-label d-flex align-items-center w-100" v-if="folder.id">
                             <span class="icon mr-2"
@@ -207,11 +207,11 @@
                         <span class="icon">{% inline "more-horizontal.svg" %}</span>
                     </template>
                     <header class="dropdown-header">{{ current.feed.title }}</header>
-                    <a class="dropdown-item" :href="current.feed.link" target="_blank" v-if="current.feed.link">
+                    <a class="dropdown-item" :href="current.feed.link" rel="noopener noreferrer" target="_blank" referrerpolicy="no-referrer" v-if="current.feed.link">
                         <span class="icon mr-1">{% inline "globe.svg" %}</span>
                         Website
                     </a>
-                    <a class="dropdown-item" :href="current.feed.feed_link" target="_blank" v-if="current.feed.feed_link">
+                    <a class="dropdown-item" :href="current.feed.feed_link" rel="noopener noreferrer" target="_blank" referrerpolicy="no-referrer" v-if="current.feed.feed_link">
                         <span class="icon mr-1">{% inline "rss.svg" %}</span>
                         Feed Link
                     </a>
@@ -219,6 +219,10 @@
                     <button class="dropdown-item" @click="renameFeed(current.feed)">
                         <span class="icon mr-1">{% inline "edit.svg" %}</span>
                         Rename
+                    </button>
+                    <button class="dropdown-item" @click="updateFeedLink(current.feed)" v-if="current.feed.feed_link">
+                        <span class="icon mr-1">{% inline "edit.svg" %}</span>
+                        Change Link
                     </button>
                     <div class="dropdown-divider"></div>
                     <header class="dropdown-header">Move to...</header>
@@ -274,7 +278,7 @@
                                 <span class="icon icon-small mr-1" v-if="item.status=='starred'">{% inline "star-full.svg" %}</span>
                             </transition>
                             <small class="flex-fill text-truncate mr-1">
-                                {{ feedsById[item.feed_id].title }}
+                                {{ (feedsById[item.feed_id] || {}).title }}
                             </small>
                             <small class="flex-shrink-0"><relative-time v-bind:title="formatDate(item.date)" :val="item.date"/></small>
                         </div>
@@ -322,10 +326,16 @@
                         title="Read Here">
                     <span class="icon" :class="{'icon-loading': loading.readability}">{% inline "book-open.svg" %}</span>
                 </button>
-                <a class="toolbar-item" :href="itemSelectedDetails.link" target="_blank" title="Open Link">
+                <a class="toolbar-item" :href="itemSelectedDetails.link" rel="noopener noreferrer" target="_blank" referrerpolicy="no-referrer" title="Open Link">
                     <span class="icon">{% inline "external-link.svg" %}</span>
                 </a>
                 <div class="flex-grow-1"></div>
+                <button class="toolbar-item" @click="navigateToItem(-1)" title="Previous Article" :disabled="itemSelected == items[0].id">
+                    <span class="icon">{% inline "chevron-left.svg" %}</span>
+                </button>
+                <button class="toolbar-item" @click="navigateToItem(+1)" title="Next Article" :disabled="itemSelected == items[items.length - 1].id">
+                    <span class="icon">{% inline "chevron-right.svg" %}</span>
+                </button>
                 <button class="toolbar-item" @click="itemSelected=null" title="Close Article">
                     <span class="icon">{% inline "x.svg" %}</span>
                 </button>
@@ -338,7 +348,11 @@
                 <div class="content-wrapper">
                     <h1><b>{{ itemSelectedDetails.title || 'untitled' }}</b></h1>
                     <div class="text-muted">
-                        <div>{{ feedsById[itemSelectedDetails.feed_id].title }}</div>
+                        <div>
+                            <span class="cursor-pointer" @click="feedSelected = 'feed:'+(feedsById[itemSelectedDetails.feed_id] || {}).id">
+                                {{ (feedsById[itemSelectedDetails.feed_id] || {}).title }}
+                            </span>
+                        </div>
                         <time>{{ formatDate(itemSelectedDetails.date) }}</time>
                     </div>
                     <hr>

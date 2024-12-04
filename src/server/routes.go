@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/nkanaev/yarr/src/assets"
+	"github.com/nkanaev/yarr/src/content/htmlutil"
 	"github.com/nkanaev/yarr/src/content/readability"
 	"github.com/nkanaev/yarr/src/content/sanitizer"
 	"github.com/nkanaev/yarr/src/content/silo"
@@ -33,7 +34,8 @@ func (s *Server) handler() http.Handler {
 			BasePath: s.BasePath,
 			Username: s.Username,
 			Password: s.Password,
-			Public:   "/static",
+			Public:   []string{"/static", "/fever"},
+			DB:       s.db,
 		}
 		r.Use(a.Handler)
 	}
@@ -56,6 +58,7 @@ func (s *Server) handler() http.Handler {
 	r.For("/opml/export", s.handleOPMLExport)
 	r.For("/page", s.handlePageCrawl)
 	r.For("/logout", s.handleLogout)
+	r.For("/fever/", s.handleFever)
 
 	return r
 }
@@ -291,6 +294,11 @@ func (s *Server) handleFeed(c *router.Context) {
 				s.db.UpdateFeedFolder(id, &folderId)
 			}
 		}
+		if link, ok := body["feed_link"]; ok {
+			if reflect.TypeOf(link).Kind() == reflect.String {
+				s.db.UpdateFeedLink(id, link.(string))
+			}
+		}
 		c.Out.WriteHeader(http.StatusOK)
 	} else if c.Req.Method == "DELETE" {
 		s.db.DeleteFeed(id)
@@ -312,6 +320,14 @@ func (s *Server) handleItem(c *router.Context) {
 			c.Out.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		// runtime fix for relative links
+		if !htmlutil.IsAPossibleLink(item.Link) {
+			if feed := s.db.GetFeed(item.FeedId); feed != nil {
+				item.Link = htmlutil.AbsoluteUrl(item.Link, feed.Link)
+			}
+		}
+
 		item.Content = sanitizer.Sanitize(item.Link, item.Content)
 
 		c.JSON(http.StatusOK, item)
@@ -355,11 +371,18 @@ func (s *Server) handleItemList(c *router.Context) {
 		}
 		newestFirst := query.Get("oldest_first") != "true"
 
-		items := s.db.ListItems(filter, perPage+1, newestFirst)
+		items := s.db.ListItems(filter, perPage+1, newestFirst, true)
 		hasMore := false
 		if len(items) == perPage+1 {
 			hasMore = true
 			items = items[:perPage]
+		}
+
+		for i, item := range items {
+			if item.Title == "" {
+				text := htmlutil.ExtractText(item.Content)
+				items[i].Title = htmlutil.TruncateText(text, 140)
+			}
 		}
 		c.JSON(http.StatusOK, map[string]interface{}{
 			"list":     items,

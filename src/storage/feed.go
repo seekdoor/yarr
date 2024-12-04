@@ -20,18 +20,19 @@ func (s *Storage) CreateFeed(title, description, link, feedLink string, folderId
 	if title == "" {
 		title = feedLink
 	}
-	result, err := s.db.Exec(`
+	row := s.db.QueryRow(`
 		insert into feeds (title, description, link, feed_link, folder_id) 
 		values (?, ?, ?, ?, ?)
-		on conflict (feed_link) do update set folder_id=?`,
+		on conflict (feed_link) do update set folder_id = ?
+        returning id`,
 		title, description, link, feedLink, folderId,
 		folderId,
 	)
+
+	var id int64
+	err := row.Scan(&id)
 	if err != nil {
-		return nil
-	}
-	id, idErr := result.LastInsertId()
-	if idErr != nil {
+		log.Print(err)
 		return nil
 	}
 	return &Feed{
@@ -67,6 +68,11 @@ func (s *Storage) RenameFeed(feedId int64, newTitle string) bool {
 
 func (s *Storage) UpdateFeedFolder(feedId int64, newFolderId *int64) bool {
 	_, err := s.db.Exec(`update feeds set folder_id = ? where id = ?`, newFolderId, feedId)
+	return err == nil
+}
+
+func (s *Storage) UpdateFeedLink(feedId int64, newLink string) bool {
+	_, err := s.db.Exec(`update feeds set feed_link = ? where id = ?`, newLink, feedId)
 	return err == nil
 }
 

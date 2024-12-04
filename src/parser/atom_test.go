@@ -94,6 +94,44 @@ func TestAtomHTMLTitle(t *testing.T) {
 	}
 }
 
+func TestAtomXHTMLTitle(t *testing.T) {
+	feed, _ := Parse(strings.NewReader(`
+		<?xml version="1.0" encoding="utf-8"?>
+		<feed xmlns="http://www.w3.org/2005/Atom">
+			<entry><title type="xhtml">say &lt;code&gt;what&lt;/code&gt;?</entry>
+		</feed>
+	`))
+	have := feed.Items[0].Title
+	want := "say what?"
+	if !reflect.DeepEqual(want, have) {
+		t.Logf("want: %#v", want)
+		t.Logf("have: %#v", have)
+		t.FailNow()
+	}
+}
+
+func TestAtomXHTMLNestedTitle(t *testing.T) {
+	feed, _ := Parse(strings.NewReader(`
+		<?xml version="1.0" encoding="utf-8"?>
+		<feed xmlns="http://www.w3.org/2005/Atom">
+			<entry>
+				<title type="xhtml">
+					<div xmlns="http://www.w3.org/1999/xhtml">
+						<a href="https://example.com">Link to Example</a>
+					</div>
+				</title>
+			</entry>
+		</feed>
+	`))
+	have := feed.Items[0].Title
+	want := "Link to Example"
+	if !reflect.DeepEqual(want, have) {
+		t.Logf("want: %#v", want)
+		t.Logf("have: %#v", have)
+		t.FailNow()
+	}
+}
+
 func TestAtomImageLink(t *testing.T) {
 	feed, _ := Parse(strings.NewReader(`
 		<?xml version="1.0" encoding="UTF-8"?>
@@ -129,5 +167,66 @@ func TestAtomImageLinkDuplicated(t *testing.T) {
 	}
 	if feed.Items[0].ImageURL != "" {
 		t.Fatal("item.image_url must be unset if present in the content")
+	}
+}
+
+func TestAtomLinkInID(t *testing.T) {
+	feed, _ := Parse(strings.NewReader(`
+		<?xml version="1.0" encoding="utf-8"?>
+		<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+			<entry>
+                <title>one updated</title>
+                <id>https://example.com/posts/1</id>
+                <updated>2003-12-13T09:17:51</updated>
+			</entry>
+			<entry>
+                <title>two</title>
+                <id>urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6</id>
+			</entry>
+			<entry>
+                <title>one</title>
+                <id>https://example.com/posts/1</id>
+			</entry>
+		</feed>
+	`))
+	have := feed.Items
+	want := []Item{
+		Item{
+			GUID:  "https://example.com/posts/1::2003-12-13T09:17:51",
+			Date:  time.Date(2003, time.December, 13, 9, 17, 51, 0, time.UTC),
+			URL:   "https://example.com/posts/1",
+			Title: "one updated",
+		},
+		Item{
+			GUID: "urn:uuid:60a76c80-d399-11d9-b93C-0003939e0af6",
+			Date: time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), URL: "",
+			Title: "two",
+		},
+		Item{
+			GUID:    "https://example.com/posts/1::",
+			Date:    time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC),
+			URL:     "https://example.com/posts/1",
+			Title:   "one",
+			Content: "",
+		},
+	}
+	if !reflect.DeepEqual(want, have) {
+		t.Fatalf("\nwant: %#v\nhave: %#v\n", want, have)
+	}
+}
+
+func TestAtomDoesntEscapeHTMLTags(t *testing.T) {
+	feed, _ := Parse(strings.NewReader(`
+		<?xml version="1.0" encoding="utf-8"?>
+		<feed xmlns="http://www.w3.org/2005/Atom">
+			<entry><summary type="html">&amp;lt;script&amp;gt;alert(1);&amp;lt;/script&amp;gt;</summary></entry>
+		</feed>
+	`))
+	have := feed.Items[0].Content
+	want := "&lt;script&gt;alert(1);&lt;/script&gt;"
+	if !reflect.DeepEqual(want, have) {
+		t.Logf("want: %#v", want)
+		t.Logf("have: %#v", have)
+		t.FailNow()
 	}
 }
